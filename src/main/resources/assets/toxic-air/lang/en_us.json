@@ -1,0 +1,24 @@
+{
+  "death.attack.toxic_air": "%s suffocated in toxic air",
+  "effect.toxic-air.respiratory_protection": "Respiratory Protection",
+
+  "item.minecraft.potion.effect.respiratory_prot_potion": "Respiratory Protection Potion",
+  "item.minecraft.splash_potion.effect.respiratory_prot_potion": "Respiratory Protection Splash Potion",
+  "item.minecraft.lingering_potion.effect.respiratory_prot_potion": "Respiratory Protection Lingering Potion",
+
+  "item.minecraft.potion.effect.respiratory_prot_potion_1": "Respiratory Protection II Potion",
+  "item.minecraft.splash_potion.effect.respiratory_prot_potion_1": "Respiratory Protection II Splash Potion",
+  "item.minecraft.lingering_potion.effect.respiratory_prot_potion_1": "Respiratory Protection II Lingering Potion",
+
+  "item.minecraft.potion.effect.respiratory_prot_potion_2": "Respiratory Protection III Potion",
+  "item.minecraft.splash_potion.effect.respiratory_prot_potion_2": "Respiratory Protection III Splash Potion",
+  "item.minecraft.lingering_potion.effect.respiratory_prot_potion_2": "Respiratory Protection III Lingering Potion",
+
+  "item.minecraft.potion.effect.respiratory_prot_potion_3": "Respiratory Protection IV Potion",
+  "item.minecraft.splash_potion.effect.respiratory_prot_potion_3": "Respiratory Protection IV Splash Potion",
+  "item.minecraft.lingering_potion.effect.respiratory_prot_potion_3": "Respiratory Protection IV Lingering Potion",
+
+  "item.minecraft.potion.effect.respiratory_prot_potion_4": "Respiratory Protection V Potion",
+  "item.minecraft.splash_potion.effect.respiratory_prot_potion_4": "Respiratory Protection V Splash Potion",
+  "item.minecraft.lingering_potion.effect.respiratory_prot_potion_4": "Respiratory Protection V Lingering Potion"
+}
