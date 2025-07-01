@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "toxic-air:block/air_sampler"
+    }
+  }
+}

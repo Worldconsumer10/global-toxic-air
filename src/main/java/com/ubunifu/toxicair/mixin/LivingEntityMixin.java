@@ -59,6 +59,6 @@ public class LivingEntityMixin {
         World playerWorld = entity.getWorld();
         if (playerWorld.isClient) return 0f;
         BlockPos eyeBlockPos = BlockPos.ofFloored(entity.getEyePos());
-        return AirHandler.getOrComputeToxicity(playerWorld, eyeBlockPos);
+        return -1;//AirHandler.getOrComputeToxicity(playerWorld, eyeBlockPos);
     }
 }
