@@ -18,6 +18,7 @@ public class AbstractBlockMixin {
 
     @Inject(method = "randomTick",at=@At("HEAD"))
     public void tickInjection(BlockState state, ServerWorld world, BlockPos pos, Random random, CallbackInfo ci){
+        if (world.isClient) return;
         if (!AirHandler.isInMap(world,pos) && AirHandler.isEligablePosition(world,pos))
             AirHandler.CreateForPosition(world,pos);
     }

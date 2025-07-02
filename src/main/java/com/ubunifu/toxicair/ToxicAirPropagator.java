@@ -1,10 +1,12 @@
 package com.ubunifu.toxicair;
 
+import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import net.minecraft.block.BlockState;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.LightType;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
@@ -13,108 +15,94 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class ToxicAirPropagator {
-    private static final float MAX_TOXICITY = 100f;
-    public static final float EMITTER_BOOST = 10f;
-    public static final float VOID_REDUCTION = 10f;
-    private static final int MAX_SKY_UPDATES_PER_TICK = 5;
+    public static final float EMITTER_BOOST = 80f;
+    public static final float VOID_REDUCTION = 50f;
+    public static final float ASYNC_TICK_PROCESSES = 50;
 
-    private static final Queue<BlockPos> skyQueue = new ConcurrentLinkedQueue<>();
-    private static final Set<BlockPos> dirtyBlocks = ConcurrentHashMap.newKeySet();
-    private static final Set<BlockPos> queued = ConcurrentHashMap.newKeySet();
+    public static Map<World, PriorityQueue<BlockPos>> QUEUE = new HashMap<>();
 
-    private static final ExecutorService executor = Executors.newFixedThreadPool(2);
-
-    public static void markDirty(World world, BlockPos pos) {
-        if (pos != null && world != null) {
-            dirtyBlocks.add(pos.toImmutable());
-        }
-    }
-    public static void markSkySensitive(BlockPos pos) {
-        if (queued.add(pos)) skyQueue.add(pos);
-    }
-
-    static float recentPropagation;
-    static int processedTicks;
     public static void tick(World world) {
-        if (!AirHandler.TOXICITY_MAP.containsKey(world)) return;
-        processedTicks++;
-        if (processedTicks % 20 == 1){
-            ToxicAir.LOGGER.info("Propergation Checkup: "+recentPropagation+" toxins have been moved around");
-            recentPropagation=0;
-        }
-        Set<BlockPos> toProcess = new HashSet<>();
-        Iterator<BlockPos> it = dirtyBlocks.iterator();
-        int limit = 50; // don't overload a single tick
-
-        while (it.hasNext() && limit-- > 0) {
-            BlockPos pos = it.next();
-            it.remove(); // consume it now
-
-            toProcess.add(pos);
-        }
-
-        for (BlockPos pos : toProcess) {
-            // Run it directly or asynchronously based on conditions
-            if (isSkyExposed(world, pos)) {
-                // run on main thread
-                propagateBlock(world, pos);
-            } else {
-                // run async
-                CompletableFuture.runAsync(() -> propagateBlock(world, pos));
+        Comparator<BlockPos> disparityComparator = Comparator.comparingDouble(pos -> {
+            if (!AirHandler.isEligablePosition(world,pos)) return 0;
+            float self = AirHandler.getOrCompute(world, pos);
+            float maxDelta = 0f;
+            for (Direction dir : Direction.values()) {
+                if (!AirHandler.isEligablePosition(world,pos.offset(dir))) continue;
+                float neighbor = AirHandler.getOrCompute(world, pos.offset(dir));
+                maxDelta = Math.max(maxDelta, Math.abs(self - neighbor));
             }
+
+            // Sky brightness adjustment (0 = no sky light → more priority)
+            int skyLight = world.getLightLevel(LightType.SKY, pos);
+            float lightFactor = 1f - (skyLight / 15f); // 1 = no light, 0 = full light
+
+            // Boost blocks with high disparity and low light
+            return -(maxDelta + lightFactor * 5f); // Adjust weight as needed
+        });
+        Long2FloatOpenHashMap worldToxin = AirHandler.CreateForWorld(world); // Updated to return map
+
+        Queue<BlockPos> blockQueue = QUEUE.computeIfAbsent(world, w -> new PriorityQueue<>(disparityComparator));
+
+        if (blockQueue.isEmpty()) {
+            // Clone keys to avoid concurrent modification
+            for (long key : worldToxin.keySet().toLongArray()) {
+                blockQueue.add(BlockPos.fromLong(key));
+            }
+            return;
         }
-    }
-    private static void propagateBlock(World world, BlockPos pos) {
-        float currentToxicity = AirHandler.GetToxicity(world, pos);
-        if (currentToxicity <= 0) return;
 
-        boolean changed = false;
+        int processed = 0;
+        while (processed < ASYNC_TICK_PROCESSES && !blockQueue.isEmpty()) {
+            BlockPos blockPos = blockQueue.poll();
+            if (blockPos == null || !isChunkBlockLoaded(world, blockPos)) continue;
+            if (!AirHandler.isEligablePosition(world,blockPos))return;
 
-        // Handle voids (purifiers)
-        for (BlockPos voidPos : AirHandler.getToxinVoids(world)) {
-            if (pos.isWithinDistance(voidPos, 6)) {
-                float newToxicity = Math.max(currentToxicity - 10f, 0f);
-                if (newToxicity < currentToxicity) {
-                    recentPropagation += newToxicity;
-                    AirHandler.SetToxicity(world, pos, newToxicity);
-                    changed = true;
+            float currentToxicity = 0;
+            try {
+                currentToxicity = AirHandler.getOrCompute(world, blockPos);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            float originalToxicity = currentToxicity;
+
+            float totalTransfer = 0f;
+
+            for (Direction dir : Direction.values()) {
+                BlockPos neighbor = blockPos.offset(dir);
+                if (!AirHandler.isEligablePosition(world,neighbor)) continue;
+                float neighborToxicity = Math.max(AirHandler.getOrCompute(world, neighbor), 0);
+
+                // Boosts/penalties from emitters or voids
+                if (AirHandler.isToxinEmitter(world, neighbor)) {
+                    neighborToxicity += EMITTER_BOOST;
+                } else if (AirHandler.isToxinVoid(world, neighbor)) {
+                    neighborToxicity = Math.max(neighborToxicity - VOID_REDUCTION, 0);
+                }
+
+                float difference = currentToxicity - neighborToxicity;
+
+                if (difference > 0) {
+                    float transferAmount = difference * 0.25f; // Only move a fraction to simulate gradual spread
+                    transferAmount = Math.min(transferAmount, currentToxicity); // Don't over-drain
+
+                    // Pull toxins from current block to neighbor
+                    AirHandler.SetToxicity(world, neighbor, neighborToxicity + transferAmount);
+                    totalTransfer += transferAmount;
                 }
             }
-        }
 
-        // Handle emitters
-        for (BlockPos emitterPos : AirHandler.getToxinEmitters(world)) {
-            if (pos.isWithinDistance(emitterPos, 6)) {
-                float newToxicity = Math.min(currentToxicity + 10f, MAX_TOXICITY);
-                if (newToxicity > currentToxicity) {
-                    recentPropagation += newToxicity;
-                    AirHandler.SetToxicity(world, pos, newToxicity);
-                    changed = true;
-                }
-            }
-        }
+            currentToxicity -= totalTransfer;
+            currentToxicity = MathHelper.clamp(currentToxicity, 0f, AirHandler.MAX_TOXICITY);
 
-        // Spread to neighbors
-        for (Direction dir : Direction.values()) {
-            BlockPos neighbor = pos.offset(dir);
-            float neighborToxicity = AirHandler.GetToxicity(world, neighbor);
-            if (neighborToxicity == -1) continue;
+            AirHandler.SetToxicity(world, blockPos, currentToxicity);
 
-            float avg = (currentToxicity + neighborToxicity) / 2f;
-            if (Math.abs(neighborToxicity - currentToxicity) > 1f) {
-                recentPropagation += avg;
-                AirHandler.SetToxicity(world, neighbor, avg);
-                markDirty(world, neighbor); // <-- Mark neighbors as dirty for future ticks
-                changed = true;
-            }
-        }
-
-        // If this block's toxicity was reduced, re-mark it
-        if (changed) {
-            markDirty(world, pos);
+            ToxicAir.LOGGER.info("Ticked {} → from {} to {}, Δ{}", blockPos, originalToxicity, currentToxicity, currentToxicity - originalToxicity);
+            processed++;
         }
     }
-    private static boolean isSkyExposed(World world, BlockPos pos) {
-        return world.getLightLevel(LightType.SKY, pos) > 0;
+    private static boolean isChunkBlockLoaded(World world,BlockPos blockPos){
+        WorldChunk worldChunk = world.getWorldChunk(blockPos);
+        ChunkPos chunkPos = worldChunk.getPos();
+        return world.isChunkLoaded(chunkPos.x,chunkPos.z);
     }
 }

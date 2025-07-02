@@ -24,6 +24,7 @@ public class AirSamplerBlock extends Block {
 
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
+        if (world.isClient) return super.onUse(state,world,pos,player,hand,hit);
         ItemStack heldItem = player.getStackInHand(hand);
         cooldown--;
         if (heldItem.isEmpty() && cooldown <= 0)
@@ -74,6 +75,7 @@ public class AirSamplerBlock extends Block {
         float minToxicity = 0;
 
         for (BlockPos pos : BlockPos.iterate(startPos, endPos)) {
+            if (!AirHandler.isEligablePosition(world,pos)) continue;
             float toxicity = AirHandler.getOrCompute(world, pos);
             if (minToxicity < toxicity)
                 minToxicity = toxicity;
