@@ -1,5 +1,6 @@
-package com.ubunifu.toxicair;
+package com.ubunifu.toxicair.itemgroups;
 
+import com.ubunifu.toxicair.ToxicAir;
 import com.ubunifu.toxicair.blocks.ModBlocks;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.item.ItemGroup;

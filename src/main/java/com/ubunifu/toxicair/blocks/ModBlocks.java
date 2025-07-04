@@ -1,6 +1,9 @@
 package com.ubunifu.toxicair.blocks;
 
 import com.ubunifu.toxicair.ToxicAir;
+import com.ubunifu.toxicair.blocks.AirPurifier.AirPurifierBlock;
+import com.ubunifu.toxicair.blocks.AirSampler.AirSamplerBlock;
+import com.ubunifu.toxicair.blocks.AirSampler.AirSamplerBlockItem;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.minecraft.block.Block;

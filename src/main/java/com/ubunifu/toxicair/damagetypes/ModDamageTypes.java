@@ -1,5 +1,6 @@
-package com.ubunifu.toxicair;
+package com.ubunifu.toxicair.damagetypes;
 
+import com.ubunifu.toxicair.ToxicAir;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageType;
 import net.minecraft.registry.RegistryKey;
