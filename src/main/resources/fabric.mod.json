@@ -18,6 +18,9 @@
 		"main": [
 			"com.ubunifu.toxicair.ToxicAir"
 		],
+		"client": [
+			"com.ubunifu.toxicair.ToxicAirClient"
+		],
 		"fabric-datagen": [
 			"com.ubunifu.toxicair.ToxicAirDataGenerator"
 		]

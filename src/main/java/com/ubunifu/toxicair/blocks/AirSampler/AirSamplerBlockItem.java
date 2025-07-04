@@ -1,5 +1,6 @@
-package com.ubunifu.toxicair.blocks.AirSampler;
+package com.ubunifu.toxicair.blocks;
 
+import com.ubunifu.toxicair.AirHandler;
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -20,6 +21,6 @@ public class AirSamplerBlockItem extends BlockItem {
         if (!selected || !world.isClient) return;
         if (!(entity instanceof PlayerEntity player)) return;
         BlockPos eyeBlockPos = BlockPos.ofFloored(player.getEyePos());
-        player.sendMessage(Text.of("Breathing: 100% Toxins"),true);
+        player.sendMessage(Text.of("Breathing: "+ AirHandler.GetToxicity(world,eyeBlockPos)+"p/t Toxins"),true);
     }
 }
