@@ -12,23 +12,8 @@ public class AirPurifierBlockEntity extends BlockEntity {
         super(ModBlockEntities.AIR_PURIFIER_BLOCK_ENTITY, pos, state);
     }
 
-    @Override
-    protected void writeNbt(NbtCompound nbt) {
-        super.writeNbt(nbt);
-        nbt.putInt("strength",AIR_STRENGTH);
-    }
-
-    @Override
-    public void readNbt(NbtCompound nbt) {
-        super.readNbt(nbt);
-        if (nbt.contains("strength"))
-            this.AIR_STRENGTH = nbt.getInt("strength");
-    }
-
     public int getStrength() {
         return this.AIR_STRENGTH;
     }
-    public void setStrength(int strength){
-        this.AIR_STRENGTH = strength;
-    }
+
 }

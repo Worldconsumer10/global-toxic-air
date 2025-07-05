@@ -36,6 +36,7 @@ public class LivingEntityMixin {
     @Inject(method = "tick", at=@At("HEAD"))
     public void tickProcessor(CallbackInfo ci){
         LivingEntity entity = (LivingEntity) (Object) this;
+        if (entity.getWorld().isClient) return;
         if (entity.getGroup() == EntityGroup.UNDEAD) return;
         if (entity.isInvulnerable()) return;
 
@@ -43,7 +44,7 @@ public class LivingEntityMixin {
 
         StatusEffectInstance protection = entity.getStatusEffect(ModEffects.RESPIRATORY_PROTECTION.value());
         int protectionLevel = protection != null ? protection.getAmplifier() + 1 : 0; // +1 because amplifier starts at 0
-        if (entity instanceof PlayerEntity) ToxicAir.LOGGER.info("Air Toxicity: "+toxicity);
+        //if (entity instanceof PlayerEntity) ToxicAir.LOGGER.info("Air Toxicity: "+toxicity);
         if (toxicity <= 0) {
             HurtTick = Math.min(HurtTick + 0.1f, MAX_HURT_TICK);
             currentHurtTimer = HurtTick;

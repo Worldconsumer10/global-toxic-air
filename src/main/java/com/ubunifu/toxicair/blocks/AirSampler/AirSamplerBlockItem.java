@@ -1,6 +1,5 @@
-package com.ubunifu.toxicair.blocks;
+package com.ubunifu.toxicair.blocks.AirSampler;
 
-import com.ubunifu.toxicair.AirHandler;
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -9,6 +8,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import com.ubunifu.toxicair.toxins.AirHandler;
 
 public class AirSamplerBlockItem extends BlockItem {
     public AirSamplerBlockItem(Block block, Settings settings) {
@@ -21,6 +21,6 @@ public class AirSamplerBlockItem extends BlockItem {
         if (!selected || !world.isClient) return;
         if (!(entity instanceof PlayerEntity player)) return;
         BlockPos eyeBlockPos = BlockPos.ofFloored(player.getEyePos());
-        player.sendMessage(Text.of("Breathing: "+ AirHandler.GetToxicity(world,eyeBlockPos)+"p/t Toxins"),true);
+        player.sendMessage(Text.of("Breathing: "+ AirHandler.getToxicity(eyeBlockPos,world)+"p/t Toxins"),true);
     }
 }

@@ -2,6 +2,7 @@ package com.ubunifu.toxicair.blocks.AirPurifier;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.EitherMapCodec;
+import com.ubunifu.toxicair.ToxicAir;
 import com.ubunifu.toxicair.toxins.AirHandler;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
@@ -19,7 +20,7 @@ public class AirPurifierBlock extends Block implements BlockEntityProvider {
     private static final VoxelShape SHAPE = AirPurifierBlock.createCuboidShape(0,0,0,16,16,16);
 
     public AirPurifierBlock(Settings settings) {
-        super(settings);
+        super(settings.ticksRandomly());
     }
 
     @Override
@@ -38,14 +39,9 @@ public class AirPurifierBlock extends Block implements BlockEntityProvider {
     }
 
     @Override
-    public boolean hasRandomTicks(BlockState state) {
-        return true;
-    }
-
-    @Override
-    public void randomTick(BlockState state, ServerWorld world, BlockPos pos, Random random) {
-        super.randomTick(state, world, pos, random);
-        if (!AirHandler.isPurifierSaved(world,pos)) AirHandler.AddPurifier(world,pos);
+    public void randomDisplayTick(BlockState state, World world, BlockPos pos, Random random) {
+        super.randomDisplayTick(state, world, pos, random);
+        AirHandler.AddPurifier(world,pos);
     }
 
     @Override
