@@ -1,13 +1,10 @@
 package com.ubunifu.toxicair.blocks.AirPurifier;
 
-import com.mojang.serialization.MapCodec;
-import com.mojang.serialization.codecs.EitherMapCodec;
 import com.ubunifu.toxicair.ToxicAir;
-import com.ubunifu.toxicair.toxins.AirHandler;
+import com.ubunifu.toxicair.toxins.AStarAirAlgorithm;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.util.shape.VoxelShape;
@@ -15,9 +12,13 @@ import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
+
 @SuppressWarnings("deprecation")
 public class AirPurifierBlock extends Block implements BlockEntityProvider {
-    private static final VoxelShape SHAPE = AirPurifierBlock.createCuboidShape(0,0,0,16,16,16);
+    private static final VoxelShape SHAPE = Block.createCuboidShape(0, 0, 0, 16, 16, 16);
 
     public AirPurifierBlock(Settings settings) {
         super(settings.ticksRandomly());
@@ -35,18 +36,7 @@ public class AirPurifierBlock extends Block implements BlockEntityProvider {
 
     @Override
     public @Nullable BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
-        return new AirPurifierBlockEntity(pos,state);
-    }
-
-    @Override
-    public void randomDisplayTick(BlockState state, World world, BlockPos pos, Random random) {
-        super.randomDisplayTick(state, world, pos, random);
-        AirHandler.AddPurifier(world,pos);
-    }
-
-    @Override
-    public BlockState onBreak(World world, BlockPos pos, BlockState state, PlayerEntity player) {
-        AirHandler.RemovePurifier(world,pos);
-        return super.onBreak(world, pos, state, player);
+        return new AirPurifierBlockEntity(pos, state);
     }
 }
+
