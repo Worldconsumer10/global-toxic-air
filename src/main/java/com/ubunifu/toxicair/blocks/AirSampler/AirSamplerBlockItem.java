@@ -22,6 +22,6 @@ public class AirSamplerBlockItem extends BlockItem {
         if (!selected || !world.isClient) return;
         if (!(entity instanceof PlayerEntity player)) return;
         BlockPos eyeBlockPos = BlockPos.ofFloored(player.getEyePos());
-        player.sendMessage(Text.of(ToxinHandler.isToxicAir(world,eyeBlockPos,true) ? "Is in toxic air!" : "Is not in toxic air."),true);
+        player.sendMessage(Text.of(ToxinHandler.PLAYER_IS_IN_TOXIN.getOrDefault(player,true) ? "Is in toxic air!" : "Is not in toxic air."),true);
     }
 }
