@@ -5,110 +5,151 @@ import com.ubunifu.toxicair.blocks.AirPurifier.AirPurifierBlockEntity;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Pair;
 import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 public class AStarAirAlgorithm {
-    public static HashMap<ServerWorld,Set<BlockPos>> AIR_PURIFIER_BLOCKS = new HashMap<>();
-    static double GetPurifierStrength(World world, BlockPos blockPos){
-        BlockEntity blockEntity = world.getBlockEntity(blockPos);
-        if (!(blockEntity instanceof AirPurifierBlockEntity airPurifierBlock)) return 0;
-        return airPurifierBlock.getEffectiveDistance();
-    }
-    private static final int SCAN_RADIUS = 4;
-    private static final int TICK_INTERVAL = 80;
-    private static final Map<UUID, Integer> entityTickCounters = new HashMap<>();
+    private static final Map<World, Map<Pair<BlockPos, BlockPos>, Double>> PATH_CACHE = new ConcurrentHashMap<>();
 
-    public static void EntityTick(LivingEntity entity) {
-        UUID entityId = entity.getUuid();
-        int tickCount = entityTickCounters.getOrDefault(entityId, 0) + 1;
+    public static double ComputeDistance(World world, BlockPos startPos, BlockPos endPos){
+        startPos = startPos.toImmutable();
+        endPos = endPos.toImmutable();
 
-        if (tickCount % TICK_INTERVAL != 0) {
-            entityTickCounters.put(entityId, tickCount);
-            return;
+        Pair<BlockPos, BlockPos> key = new Pair<>(startPos, endPos);
+        Map<Pair<BlockPos, BlockPos>, Double> worldCache = PATH_CACHE.computeIfAbsent(world, w -> new ConcurrentHashMap<>());
+
+        BlockPos[] spos = {startPos};
+        BlockPos[] epos = {endPos};
+
+        // Immediate cache return
+        Double cachedResult = worldCache.get(key);
+        if (cachedResult != null) {
+            // Recompute it async for next time
+            CompletableFuture.runAsync(() -> {
+                double freshValue = internalCompute(world, spos[0], epos[0]);
+                worldCache.put(key, freshValue);
+            });
+            return cachedResult;
         }
-        entityTickCounters.put(entityId, 0);
 
-        World world = entity.getWorld();
-        if (world.isClient || !(world instanceof ServerWorld serverWorld)) return;
-
-        BlockPos origin = entity.getBlockPos();
-        BlockBox scanBox = BlockBox.create(origin.add(-SCAN_RADIUS, -SCAN_RADIUS, -SCAN_RADIUS),
-                origin.add(SCAN_RADIUS, SCAN_RADIUS, SCAN_RADIUS));
-
-        Set<BlockPos> purifiers = AStarAirAlgorithm.AIR_PURIFIER_BLOCKS
-                .computeIfAbsent(serverWorld, w -> new ConcurrentSkipListSet<>());
-
-        BlockPos.stream(scanBox)
-                .filter(pos -> serverWorld.getBlockEntity(pos) instanceof AirPurifierBlockEntity)
-                .forEach(pos -> purifiers.add(pos.toImmutable()));
+        // No cached result, compute it sync this time
+        double result = internalCompute(world, startPos, endPos);
+        worldCache.put(key, result);
+        if (worldCache.size() > 1000)
+            try{//noinspection SuspiciousMethodCalls
+                worldCache.remove(worldCache.keySet().stream().findFirst());
+            }catch (Exception ignored){}
+        return result;
     }
 
-    public static boolean isToxicAir(World world, BlockPos blockPos) {
-        if (world.isClient) return true;
-        Set<BlockPos> purifierPositions = AIR_PURIFIER_BLOCKS.getOrDefault(world, Collections.emptySet());
-
-        ToxicAir.LOGGER.info("Purifiers: "+purifierPositions.size());
-        for (BlockPos purifierPos : purifierPositions) {
-            double maxDistance = GetPurifierStrength(world, purifierPos);
-            ToxicAir.LOGGER.info("Max Strength of purifier: "+maxDistance);
-            if (maxDistance <= 0) continue;
-
-            double pathDistance = GetDistance(world, blockPos, purifierPos);
-            ToxicAir.LOGGER.info("Distance to purifier: "+pathDistance);
-            if (pathDistance < 0) continue; // Unreachable
-
-            if (pathDistance <= maxDistance) {
-                ToxicAir.LOGGER.info("Close enough");
-                return false; // Within reach of at least one purifier
-            }
-        }
-        ToxicAir.LOGGER.info("Too far");
-        return true; // No reachable purifiers = toxic
-    }
-    public static double GetDistance(World world, BlockPos startPos, BlockPos endPos) {
+    static double internalCompute(World world, BlockPos startPos, BlockPos endPos) {
+        startPos = startPos.toImmutable();
+        endPos = endPos.toImmutable();
         if (startPos.equals(endPos)) return 0;
         if (GetNodeType(world, startPos) != WorldStaticNodeCache.NODE_PATH_TYPE.AIR ||
-                GetNodeType(world, endPos) != WorldStaticNodeCache.NODE_PATH_TYPE.AIR)
-            return -1;
-        Queue<BlockPos> queue = new ArrayDeque<>();
-        Map<BlockPos, Integer> visited = new HashMap<>();
-        queue.add(startPos);
-        visited.put(startPos, 0);
-        while (!queue.isEmpty()) {
-            BlockPos current = queue.poll();
-            int currentDist = visited.get(current);
+                GetNodeType(world, endPos) != WorldStaticNodeCache.NODE_PATH_TYPE.BLOCKED)
+            return Double.MAX_VALUE;
+        float maxNodes = ComputeMaxSteps(startPos,endPos);
+        float expandedNodes = 0;
+
+        PriorityQueue<Node> openSet = new PriorityQueue<>();
+        Set<BlockPos> closedSet = new HashSet<>();
+        Map<BlockPos, Float> gScore = new HashMap<>();
+        gScore.put(startPos,0f);
+        openSet.add(new Node(world,startPos, 0f, heuristic(startPos, endPos)));
+        while (!openSet.isEmpty()) {
+            if (++expandedNodes > maxNodes) {
+                //System.out.println("[A*] Aborted: Node limit exceeded (" + expandedNodes + " > " + maxNodes + ")");
+                return Double.MAX_VALUE;
+            }
+            Node current = openSet.poll();
+            BlockPos blockPos = current.pos;
+            if (isClose(blockPos,endPos)) {
+                return gScore.get(blockPos); // Or reconstruct path from cameFrom
+            }
+            closedSet.add(blockPos);
+
             for (Direction dir : Direction.values()) {
-                BlockPos neighbor = current.offset(dir);
-                if (visited.containsKey(neighbor)) continue;
-                if (GetNodeType(world, neighbor) != WorldStaticNodeCache.NODE_PATH_TYPE.AIR) continue;
-                visited.put(neighbor, currentDist + 1);
-                if (neighbor.equals(endPos))
-                    return currentDist + 1;
-                queue.add(neighbor);
+                BlockPos neighbor = blockPos.offset(dir).toImmutable();
+                if (!isClose(neighbor,endPos) && GetNodeType(world, neighbor) != WorldStaticNodeCache.NODE_PATH_TYPE.AIR) continue;
+                if (closedSet.contains(neighbor)) continue;
+
+                float tentativeG = gScore.getOrDefault(blockPos, Float.MAX_VALUE) + GetNodeMalice(world, neighbor);
+
+                if (tentativeG < gScore.getOrDefault(neighbor, Float.MAX_VALUE)) {
+                    gScore.put(neighbor, tentativeG);
+
+                    float h = heuristic(neighbor, endPos);
+                    //debugNode(world,neighbor,h);
+                    openSet.add(new Node(world,neighbor, tentativeG, h));
+                }
             }
         }
-        return -1; // No path found
+        return gScore.getOrDefault(endPos,Float.MAX_VALUE);
+    }
+    private static void debugNode(World world, BlockPos pos, float fCost) {
+        if (!(world instanceof ServerWorld)) return;
+        ((ServerWorld) world).spawnParticles(
+                fCost < 10 ? ParticleTypes.END_ROD : ParticleTypes.SMOKE,
+                pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5,
+                1, 0, 0, 0, 0.0
+        );
+    }
+    private static boolean isClose(BlockPos a, BlockPos b)
+    {return a.isWithinDistance(b,1.5f);}
+
+    static float ComputeMaxSteps(BlockPos startPos, BlockPos endPos){
+        int estimatedSteps = Math.abs(startPos.getX() - endPos.getX())
+                + Math.abs(startPos.getY() - endPos.getY())
+                + Math.abs(startPos.getZ() - endPos.getZ());
+        return estimatedSteps * 2;
+    }
+    static float heuristic(BlockPos a, BlockPos b) {
+        return Math.abs(a.getX() - b.getX()) +
+                Math.abs(a.getY() - b.getY()) +
+                Math.abs(a.getZ() - b.getZ());
     }
     public static WorldStaticNodeCache.NODE_PATH_TYPE GetNodeType(World world,BlockPos blockPos){
         return WorldStaticNodeCache.GetOrCompute(world,blockPos); // Either AIR or BLOCKED
     }
+    public static int GetNodeMalice(World world, BlockPos blockPos){
+        WorldStaticNodeCache.NODE_PATH_TYPE type = GetNodeType(world, blockPos);
+        return switch (type) {
+            case AIR -> 1; // normal air
+            case AIR_SUNLIT -> 2; // sun-exposed air, cost amplified to simulate harder purifier reach
+            default -> 100; // blocked or toxic, basically impassable
+        };
+    }
 
-    private static class Node {
+    private static class Node implements Comparable<Node> {
         BlockPos pos;
-        double gScore;  // Cost from start
-        double fScore;  // gScore + heuristic
+        float gCost; // Cost from start
+        float hCost; // Heuristic to goal
+        float fCost; // gCost + hCost
+        WorldStaticNodeCache.NODE_PATH_TYPE nodeType;
 
-        Node(BlockPos pos, double gScore, double fScore) {
+        public Node(World world,BlockPos pos, float gCost, float hCost) {
             this.pos = pos;
-            this.gScore = gScore;
-            this.fScore = fScore;
+            this.gCost = gCost;
+            this.hCost = hCost;
+            this.fCost = gCost + hCost;
+            this.nodeType = GetNodeType(world,pos);
+        }
+
+        @Override
+        public int compareTo(Node other) {
+            return Float.compare(this.fCost, other.fCost);
         }
     }
 }

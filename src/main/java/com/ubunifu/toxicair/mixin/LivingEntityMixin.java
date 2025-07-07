@@ -4,6 +4,7 @@ import com.ubunifu.toxicair.ToxicAir;
 import com.ubunifu.toxicair.damagetypes.ModDamageTypes;
 import com.ubunifu.toxicair.effect.ModEffects;
 import com.ubunifu.toxicair.toxins.AStarAirAlgorithm;
+import com.ubunifu.toxicair.toxins.ToxinHandler;
 import net.minecraft.entity.EntityGroup;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.*;
@@ -16,6 +17,8 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.HashMap;
 
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin {
@@ -37,22 +40,25 @@ public class LivingEntityMixin {
         LivingEntity entity = (LivingEntity) (Object) this;
         if (entity.getWorld().isClient) return;
         if (entity.getGroup() == EntityGroup.UNDEAD) return;
-        if (entity instanceof PlayerEntity)
-            AStarAirAlgorithm.EntityTick(entity);
+        ToxinHandler.EntityTick(entity);
         if (entity.isInvulnerable()) return;
 
         StatusEffectInstance protection = entity.getStatusEffect(ModEffects.RESPIRATORY_PROTECTION.value());
         int protectionLevel = protection != null ? protection.getAmplifier() + 1 : 0; // +1 because amplifier starts at 0
-        if (!AStarAirAlgorithm.isToxicAir(entity.getWorld(),entity.getBlockPos().toImmutable())) {
+        if (!ToxinHandler.isToxicAir(entity.getWorld(),entity.getBlockPos().toImmutable(), false)) {
             HurtTick = Math.min(HurtTick + 0.1f, MAX_HURT_TICK);
             currentHurtTimer = HurtTick;
+            if (entity instanceof PlayerEntity player)
+            { ToxinHandler.PLAYER_IS_IN_TOXIN.put(player,false); }
             return;
         }
+        if (entity instanceof PlayerEntity player)
+        { ToxinHandler.PLAYER_IS_IN_TOXIN.put(player,true); }
 
         float resistance = protectionLevel * 0.1f;
         float toxicityEffect = (1f - resistance);
 
-        //if (entity instanceof PlayerEntity) ToxicAir.LOGGER.info("Player is in toxic air.");
+        if (entity instanceof PlayerEntity) ToxicAir.LOGGER.info("Player is in toxic air.");
         currentHurtTimer -= toxicityEffect;
         if (currentHurtTimer <= 0f) {
             float damage = MathHelper.clamp(toxicityEffect * 2f, 0.5f, 6f); // Damage scales with severity

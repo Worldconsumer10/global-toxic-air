@@ -24,7 +24,7 @@ public class AbstractBlockMixin {
                 throw new RuntimeException(e);
             }
         });
-        if (map.isAirConveyable(world,pos))
+        if (map.isAirConveyable(pos))
             map.NODE_TYPES.put(pos.toImmutable(), WorldStaticNodeCache.NODE_PATH_TYPE.AIR);
         else
             map.NODE_TYPES.put(pos.toImmutable(), WorldStaticNodeCache.NODE_PATH_TYPE.BLOCKED);

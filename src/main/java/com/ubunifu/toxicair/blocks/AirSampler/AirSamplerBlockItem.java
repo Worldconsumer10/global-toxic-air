@@ -1,6 +1,7 @@
 package com.ubunifu.toxicair.blocks.AirSampler;
 
 import com.ubunifu.toxicair.toxins.AStarAirAlgorithm;
+import com.ubunifu.toxicair.toxins.ToxinHandler;
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -21,6 +22,6 @@ public class AirSamplerBlockItem extends BlockItem {
         if (!selected || !world.isClient) return;
         if (!(entity instanceof PlayerEntity player)) return;
         BlockPos eyeBlockPos = BlockPos.ofFloored(player.getEyePos());
-        player.sendMessage(Text.of(AStarAirAlgorithm.isToxicAir(world,eyeBlockPos) ? "Is in toxic air!" : "Is not in toxic air."),true);
+        player.sendMessage(Text.of(ToxinHandler.isToxicAir(world,eyeBlockPos,true) ? "Is in toxic air!" : "Is not in toxic air."),true);
     }
 }

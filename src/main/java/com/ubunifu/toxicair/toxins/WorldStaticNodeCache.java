@@ -2,6 +2,7 @@ package com.ubunifu.toxicair.toxins;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.LightType;
 import net.minecraft.world.World;
 
 import java.util.HashMap;
@@ -17,15 +18,20 @@ public class WorldStaticNodeCache {
         worldWorldStaticNodeCacheHashMap.putIfAbsent(world, this);
     }
 
-    public boolean isAirConveyable(World world, BlockPos blockPos){
+    public boolean isAirConveyable(BlockPos blockPos){
         if (world.isClient) return false;
         BlockState blockState = world.getBlockState(blockPos);
         return !blockState.isSolidBlock(world,blockPos);
     }
+    boolean isSunlit(BlockPos blockPos){
+        return world.getLightLevel(LightType.SKY,blockPos) > 0;
+    }
 
     public NODE_PATH_TYPE GetOrCompute(BlockPos blockPos){
         return NODE_TYPES.computeIfAbsent(blockPos.toImmutable(),w->{
-            if (isAirConveyable(world,w))
+            if (isAirConveyable(w) && isSunlit(w))
+                return NODE_PATH_TYPE.AIR_SUNLIT;
+            if (isAirConveyable(w))
                 return NODE_PATH_TYPE.AIR;
             return NODE_PATH_TYPE.BLOCKED;
         });
@@ -45,6 +51,7 @@ public class WorldStaticNodeCache {
 
     public enum NODE_PATH_TYPE {
         BLOCKED,
-        AIR
+        AIR,
+        AIR_SUNLIT
     }
 }
